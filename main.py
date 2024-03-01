@@ -1,11 +1,12 @@
 import logging
-
 import requests
 import datetime
 import logging as LOG
-from requests.auth import HTTPBasicAuth
+from expression_export import get_expressions
 from requests.cookies import RequestsCookieJar
-
+from kubernetes_api import Kubernetes_Api
+# 0. get the pods (their names) of namespace "camunda-platform"
+#
 # 1. Call the exposed api to start the test process
 #
 # 2. stream the data (operate, zeebe, kepler/prometheus) for a
@@ -13,9 +14,11 @@ from requests.cookies import RequestsCookieJar
 #
 # 3. parse the data from the different
 # sources together in a data modele which includes a time-stamp, the number of running instances, the power metrics
-
+#
+# Api for pormetheus: localhost:9090/api/v1/query
 
 BASE_URL = "http://localhost"
+NAME_SPACE = "camunda-platform"
 
 
 def startUp() -> bool:
@@ -41,7 +44,7 @@ def operate_auth() -> RequestsCookieJar:
     path = f"/api/login?username={login_data}&password={login_data}"
     url = BASE_URL + f":{port}" + path
     LOG.info(f"{datetime.datetime.now()} | Trying to obtain auth cookie for operate")
-    auth_response = requests.post(url="http://localhost:8081/api/login?username=demo&password=demo")
+    auth_response = requests.post(url=url)
     LOG.info(f'{datetime.datetime.now()} | Got operate auth with cookie')
     return auth_response.cookies
 
@@ -58,8 +61,17 @@ def processes_running() -> (bool, int):
     return active_count > 0, active_count
 
 
+# Method is trying to scrap data from the prometheus endpoint which behaves like a database query
+def prometheus_data():
+    queries = get_expressions()
+
+
 if __name__ == "__main__":
     LOG.basicConfig(level=logging.INFO)
+    kube_info = Kubernetes_Api(NAME_SPACE)
+    pods = kube_info.getPods()
     startUp()
-    while processes_running():
-
+    running = True
+    while running:
+        running = processes_running()[0]
+        prometheus_data()
