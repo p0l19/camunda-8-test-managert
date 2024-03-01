@@ -1,10 +1,13 @@
 import logging
 import requests
-import datetime
+import csv
+from datetime import datetime
 import logging as LOG
 from expression_export import get_expressions
-from requests.cookies import RequestsCookieJar
+from operate_api import Operate_Api
 from kubernetes_api import Kubernetes_Api
+from prometheus_api import Prometheus_Api
+
 # 0. get the pods (their names) of namespace "camunda-platform"
 #
 # 1. Call the exposed api to start the test process
@@ -19,16 +22,17 @@ from kubernetes_api import Kubernetes_Api
 
 BASE_URL = "http://localhost"
 NAME_SPACE = "camunda-platform"
+CAMUNDA_VERSION = "camunda_8"
 
 
 def startUp() -> bool:
     port = 8080
-    amount = 1
+    amount = 0
     path = f"/process/start/{amount}"
     url = BASE_URL + f":{port}" + path
     LOG.info("Starting Test")
     start_response = requests.get(url)
-    start_timestamp = datetime.datetime.now()
+    start_timestamp = datetime.now()
     status_code = start_response.status_code
     success = False
     if status_code / 100 == 2:
@@ -38,40 +42,21 @@ def startUp() -> bool:
     return success
 
 
-def operate_auth() -> RequestsCookieJar:
-    login_data = "demo"
-    port = 8081
-    path = f"/api/login?username={login_data}&password={login_data}"
-    url = BASE_URL + f":{port}" + path
-    LOG.info(f"{datetime.datetime.now()} | Trying to obtain auth cookie for operate")
-    auth_response = requests.post(url=url)
-    LOG.info(f'{datetime.datetime.now()} | Got operate auth with cookie')
-    return auth_response.cookies
-
-
-def processes_running() -> (bool, int):
-    port = 8081
-    path = "/v1/process-instances/search"
-    body = '{"filter": {"state": "ACTIVE"}}'
-    url = BASE_URL + f":{port}" + path
-    headers = {"accept": "application/json", "Content-Type": "application/json"}
-    operate_request = requests.post(url=url, data=body, headers=headers, cookies=operate_auth())
-    active_count = operate_request.json()["total"]
-    LOG.info(f"{datetime.datetime.now()}| Found {active_count} active instances")
-    return active_count > 0, active_count
-
-
-# Method is trying to scrap data from the prometheus endpoint which behaves like a database query
-def prometheus_data():
-    queries = get_expressions()
-
-
 if __name__ == "__main__":
     LOG.basicConfig(level=logging.INFO)
     kube_info = Kubernetes_Api(NAME_SPACE)
     pods = kube_info.getPods()
+    prometheus_api = Prometheus_Api(queries=get_expressions(), pods=pods, namespaces=[NAME_SPACE])
+    prometheus_api.prepare_queries()
+    operate_api = Operate_Api()
     startUp()
-    running = True
-    while running:
-        running = processes_running()[0]
-        prometheus_data()
+
+    # create a csv-file that will hold the data for the test run
+    path = f"{CAMUNDA_VERSION}_test_run_{datetime.now()}.csv"
+    with open(f"data/{path}", "a") as test_run_data:
+        test_data_writer = csv.writer(test_run_data)
+        fields = ["timestamp", "podname", "ressource-type", "energy", "co_2"]
+        test_data_writer.writerow(fields)
+        running = True
+        while running:
+            running = operate_api.processes_running()[0]

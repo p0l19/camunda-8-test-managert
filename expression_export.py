@@ -17,8 +17,5 @@ def findExpression(obj) -> list:
 def get_expressions():
     with open("data/grafana-dashboard.json") as grafana_json:
         grafana = json.load(grafana_json)
-        print(grafana)
         expressions = findExpression(grafana)
-        print(expressions)
-        for expr in expressions:
-            print(expr + ",")
+        return expressions

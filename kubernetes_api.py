@@ -20,3 +20,5 @@ class Kubernetes_Api:
         for i in ret.items:
             LOG.info(f"| Found Pod: {i.status.pod_ip} / {i.metadata.namespace} / {i.metadata.name}")
             pods.append(i)
+        return pods
+
