@@ -1,6 +1,7 @@
 import logging
 import requests
-import csv
+import json
+import time
 from datetime import datetime
 import logging as LOG
 from expression_export import get_expressions
@@ -27,7 +28,7 @@ CAMUNDA_VERSION = "camunda_8"
 
 def startUp() -> bool:
     port = 8080
-    amount = 0
+    amount = 1
     path = f"/process/start/{amount}"
     url = BASE_URL + f":{port}" + path
     LOG.info("Starting Test")
@@ -52,11 +53,16 @@ if __name__ == "__main__":
     startUp()
 
     # create a csv-file that will hold the data for the test run
-    path = f"{CAMUNDA_VERSION}_test_run_{datetime.now()}.csv"
+    formatted_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    path = f"{CAMUNDA_VERSION}_test_run_{formatted_datetime}.json"
+    time.sleep(5)
     with open(f"data/{path}", "a") as test_run_data:
-        test_data_writer = csv.writer(test_run_data)
-        fields = ["timestamp", "podname", "ressource-type", "energy", "co_2"]
-        test_data_writer.writerow(fields)
         running = True
+        test_data = {}
         while running:
             running = operate_api.processes_running()[0]
+            data = prometheus_api.fetch_data()
+            LOG.info(data)
+            test_data[datetime.now().strftime("%Y-%m-%d_%H-%M-%S")] = data
+            time.sleep(3.0)
+        json.dump(test_data, test_run_data)
